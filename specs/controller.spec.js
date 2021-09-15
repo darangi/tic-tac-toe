@@ -132,6 +132,17 @@ describe('Game', () => {
       expect(response.status).toBe(200);
     });
 
+    it('Should return status code 404 when a move is made on a non-existing match', async () => {
+      const response = await submitMove({
+        player: playerPiece,
+        row: 0,
+        column: 0,
+        matchId: generateId(),
+      });
+
+      expect(response.status).toBe(404);
+    });
+
     it('Should return status code 400 when there are missing parameter(s)', async () => {
       const response = await submitMove();
 
