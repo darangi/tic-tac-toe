@@ -1,8 +1,7 @@
 const express = require('express');
+const gameRoute = require('./game');
 
 const router = express.Router();
-
-const gameRoute = require('./game');
 
 router.use('/', gameRoute);
 

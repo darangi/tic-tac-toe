@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const logger = require('morgan');
 const ip = require('ip');
-const socket = require('./scripts/socket');
+const socket = require('./services/socket');
 const routes = require('./routes/index');
 
 const app = express();

@@ -1,143 +1,130 @@
 /* eslint-disable no-undef */
 const request = require('supertest');
-
 const server = require('../app');
-const socket = require('../scripts/socket');
-const { resetGame } = require('../services/game');
+const socket = require('../services/socket');
 const { generateId } = require('../scripts/utils');
 
-describe('Game', () => {
-  afterAll(async () => {
-    server.close();
-  });
+class RequestFormatter {
+  _data;
 
+  constructor(data) {
+    this._data = data.body.result
+  } 
+  get players() {
+    return  Object.keys(this._data.players);
+  }
+
+  get matchId() {
+    return this._data.matchId;
+  }
+
+  playerPiece(playerId) {
+      return this._data.players[playerId]
+  }
+
+}
+describe('Game', () => {
   const socketSpy = jest.spyOn(socket, 'emit');
 
-  const post = async (url, payload) => {
-    const response = await request(server).post(url).send(payload);
-    return response;
-  };
+  const post = async (url, payload) => request(server).post(url).send(payload);
 
-  const start = (playerIds) => {
-    const games = !playerIds ? [post('/play')] : playerIds.map((playerId) => post('/play', { playerId }));
+  const singleRequest = (data) => post('/play', data);
+  
+  const multipleRequests = (playerIds) => {
+    const games = playerIds.map((playerId) => post('/play', { playerId }));
 
     return Promise.all(games);
   };
 
   const submitMove = (move) => post('/submitMove', move);
 
-  const getData = ({ body: { result } }, key) => {
-    switch (key) {
-      case 'players':
-        return Object.keys(result[key]);
-      case 'playerPiece':
-        return result.players;
-
-      default:
-        return result[key];
-    }
-  };
-
   describe('POST: /play', () => {
-    afterEach(resetGame);
+    afterEach(async () => {
+      server.close();
+    });
 
     it('Should return status code 200', async () => {
-      const playerIds = [generateId()];
-
-      const [game] = await start(playerIds);
-
-      expect(game.status).toBe(200);
+      const response = await singleRequest({ playerId: generateId() });
+      expect(response.status).toBe(200);
     });
 
     it('Should return status code 400 when no playerId is passed', async () => {
-      const [game] = await start();
+      const response = await singleRequest();
 
-      expect(game.status).toBe(400);
+      expect(response.status).toBe(400);
 
-      expect(game.body.message).toContain('playerId');
+      expect(response.body.message).toContain('playerId');
     });
 
     it('Socket emits join to the client', async () => {
-      const playerIds = [generateId()];
+      await singleRequest({ playerId: generateId() });
 
-      const [game] = await start(playerIds);
-
-      expect(socketSpy).toHaveBeenCalledWith('join', game.body.result);
+      expect(socketSpy).toHaveBeenCalledWith('join', expect.anything());
     });
 
-    it('Should allow 2 players per game', async () => {
+    it('Should allow multiple matches and 2 players per match', async () => {
       const playerIds = [1, 2, 3, 4].map(() => generateId());
       const [firstPlayer, secondPlayer, thirdPlayer, fourthPlayer] = playerIds;
 
-      const [result1, result2, result3, result4] = await start(playerIds);
+      const [first, second, third, fourth] = await multipleRequests(playerIds);
 
-      const firstJoinPlayers = getData(result1, 'players');
-      const secondJoinPlayers = getData(result2, 'players');
-      const thirdJoinPlayers = getData(result3, 'players');
-      const fourthJoinPlayers = getData(result4, 'players');
+      const firstRequest = new RequestFormatter(first);
+      const secondRequest  = new RequestFormatter(second);
+      const thirdRequest  = new RequestFormatter(third);
+      const fourthRequest  = new RequestFormatter(fourth);
 
-      const firstJoinMatchId = getData(result1, 'matchId');
-      const secondJoinMatchId = getData(result2, 'matchId');
-      const thirdJoinMatchId = getData(result3, 'matchId');
-      const fourthJoinMatchId = getData(result4, 'matchId');
+      expect(firstRequest.matchId).toBe(secondRequest.matchId);
+      expect(thirdRequest.matchId).toBe(fourthRequest.matchId);
+      expect([firstRequest.matchId,secondRequest.matchId ]).not.toEqual([thirdRequest.matchId,fourthRequest.matchId])
+      
+      expect(firstRequest.players.length).toBeLessThan(2);
+      expect(firstRequest.players).toContain(firstPlayer);
 
-      expect(firstJoinMatchId).toEqual(secondJoinMatchId);
+      expect(secondRequest.players.length).toEqual(2);
+      expect(secondRequest.players).toEqual([firstPlayer, secondPlayer]);
+      expect(secondRequest.players).not.toEqual([thirdPlayer, fourthPlayer]);
 
-      expect(secondJoinMatchId).not.toEqual(thirdJoinMatchId);
+      expect(thirdRequest.players.length).toBeLessThan(2);
+      expect(thirdRequest.players).toContain(thirdPlayer);
 
-      expect(firstJoinMatchId).not.toEqual(thirdJoinMatchId);
-
-      expect(fourthJoinMatchId).toEqual(thirdJoinMatchId);
-
-      expect(firstJoinPlayers.length).toBe(1);
-      expect(firstJoinPlayers).toContain(firstPlayer);
-
-      expect(secondJoinPlayers.length).toBe(2);
-      expect(secondJoinPlayers).toEqual([firstPlayer, secondPlayer]);
-
-      expect(firstJoinPlayers).toEqual(expect.not.arrayContaining([thirdPlayer, fourthPlayer]));
-      expect(secondJoinPlayers).toEqual(expect.not.arrayContaining([thirdPlayer, fourthPlayer]));
-
-      expect(thirdJoinPlayers.length).toBe(1);
-      expect(thirdJoinPlayers).toContain(thirdPlayer);
-
-      expect(fourthJoinPlayers.length).toBe(2);
-      expect(fourthJoinPlayers).toEqual([thirdPlayer, fourthPlayer]);
-
-      expect(thirdJoinPlayers).toEqual(expect.not.arrayContaining([firstPlayer, secondPlayer]));
-      expect(fourthJoinPlayers).toEqual(expect.not.arrayContaining([firstPlayer, secondPlayer]));
+      expect(fourthRequest.players.length).toEqual(2);
+      expect(fourthRequest.players).toEqual([thirdPlayer, fourthPlayer]);
+      expect(fourthRequest.players).not.toEqual([firstPlayer, secondPlayer]);
     });
 
     it('Should allow either player to be X or O', async () => {
       const playerIds = [1, 2].map(() => generateId());
       const [firstPlayer, secondPlayer] = playerIds;
 
-      const [result1, result2] = await start(playerIds);
+      const [first, second] = await multipleRequests(playerIds);
 
-      const firstPlayerPiece = getData(result1, 'playerPiece')[firstPlayer];
-      const secondPlayerPiece = getData(result2, 'playerPiece')[secondPlayer];
+      const firstRequest = new RequestFormatter(first);
+      const secondRequest = new RequestFormatter(second);
 
-      expect(firstPlayerPiece).not.toEqual(secondPlayerPiece);
+      expect(firstRequest.playerPiece(firstPlayer)).not.toEqual(secondRequest.playerPiece(secondPlayer));
     });
   });
 
   describe('POST: /submitMove', () => {
     const playerIds = [generateId(), generateId()];
     let match;
-    let lastPlayerPiece;
+    let playerPiece;
+    let move = {}
 
     it('Should return status code 200', async () => {
       [firstPlayer, secondPlayer] = playerIds;
 
-      [, match] = await start(playerIds);
+      const [, request] = await multipleRequests(playerIds);
 
-      lastPlayerPiece = getData(match, 'playerPiece')[firstPlayer];
+      match = new RequestFormatter(request);
 
-      const move = {
-        player: lastPlayerPiece,
+      playerPiece = match.playerPiece(firstPlayer);
+
+      move = {
+        player: playerPiece,
         row: 0,
         column: 0,
-        matchId: getData(match, 'matchId'),
+        matchId: match.matchId,
       };
 
       const response = await submitMove(move);
@@ -153,26 +140,18 @@ describe('Game', () => {
       expect(response.body.message).toContain('Missing field(s)');
     });
 
-    it('Should return status code 401 when a player register another move before opponent makes a move', async () => {
-      const move = {
-        player: lastPlayerPiece,
-        row: 0,
-        column: 1,
-        matchId: getData(match, 'matchId'),
-      };
+    it('Should return status code 400 when a player register another move before opponent makes a move', async () => {
+      move.column = 1
 
       const response = await submitMove(move);
 
-      expect(response.status).toBe(401);
+      expect(response.status).toBe(400);
     });
 
-    it('Should return status code 400 when a player tries to make a move in the same position', async () => {
-      const move = {
-        player: lastPlayerPiece === 'X' ? 'O' : 'X',
-        row: 0,
-        column: 0,
-        matchId: getData(match, 'matchId'),
-      };
+    it('Should return status code 400 when  a move is made in the same position', async () => {
+      move.player = playerPiece === 'X' ? 'O' : 'X';
+      move.row = 0;
+      move.column = 0;
 
       const response = await submitMove(move);
 
@@ -180,16 +159,13 @@ describe('Game', () => {
     });
 
     it('Should emit submitMove to client', async () => {
-      const move = {
-        player: lastPlayerPiece === 'X' ? 'O' : 'X',
-        row: 0,
-        column: 1,
-        matchId: getData(match, 'matchId'),
-      };
+      move.player = playerPiece === 'X' ? 'O' : 'X';
+      move.row = 0;
+      move.column = 1;
 
       await submitMove(move);
 
-      expect(socketSpy).toHaveBeenCalled();
+      expect(socketSpy).toHaveBeenCalledWith('submitMove', expect.anything());
     });
   });
 });

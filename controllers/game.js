@@ -1,38 +1,37 @@
-const socket = require('../scripts/socket');
-const service = require('../services/game');
+const socket = require('../services/socket');
+const Match = require('../services/match');
+const matches = require('../services/matches');
+const { validateRequest } = require('../scripts/utils');
 
-const { generateId, matchStatus, validateRequest } = require('../scripts/utils');
-
-const start = async (req, res) => {
+const start = (req, res) => {
   try {
     const { playerId } = req.body;
-
     // Improvement: use a validator middleware
     if (!playerId) {
       return res.status(400).send({ message: 'Missing field, playerId' });
     }
 
-    const matchId = service.joinMatch({ matchId: generateId(), playerId });
-    const board = service.joinBoard({ matchId, playerId });
+    let match = matches.findAvailableMatch();
+    if (!match) {
+      match = new Match();
+      matches.addMatch(match);
+    }
+    match.join(playerId);
 
-    const turn = board.players[playerId];
+    socket.emit('join', {
+      matchId: match.getMatchId(),
+      player: playerId,
+      players: match.getPlayers(),
+      isNewUser: matches.isPlayerNew(playerId),
+    });
 
-    const result = {
-      player: board.players[playerId],
-      matchId,
-      turn,
-      ...board,
-    };
-
-    socket.emit('join', result);
-
-    return res.send({ result });
+    return res.send({ result: match.state() });
   } catch (ex) {
     return res.status(500).send({ result: 'An error occured' });
   }
 };
 
-const move = async (req, res) => {
+const move = (req, res) => {
   try {
     const {
       matchId, row, column, player,
@@ -47,39 +46,24 @@ const move = async (req, res) => {
       return res.status(400).send({ message: `Missing field(s), ${missingFields}` });
     }
 
-    let board = service.findBoard(matchId);
-
-    if (board?.lastMove && board.lastMove === player) {
-      return res.status(401).send({ result: false });
+    const match = matches.getMatch(matchId);
+    if (!match) {
+      return res.status(404).send({ message: 'Match does not exist' });
     }
 
-    board = service.updateMove({
-      matchId, player, row, column,
-    });
+    if (match.lastMove() === player || match.playerTurn() !== player) {
+      return res.status(400).send({ result: false });
+    }
 
-    if (!board) {
+    const success = match.play({ player, row, column });
+    if (!success) {
       return res.status(400).send({ message: 'Unable to register move' });
     }
 
-    const { gameOver, winner } = matchStatus(board);
-
-    if (gameOver || winner) {
-      service.updateMatch(matchId, { gameOver, winner });
-    }
-
-    const result = {
-      ...board,
-      player,
-      matchId,
-      gameOver,
-      winner,
-      turn: player === 'X' ? 'O' : 'X',
-    };
-
-    socket.emit('submitMove', result);
+    socket.emit('submitMove', match.state());
 
     return res.send({ result: true });
-  } catch (error) {
+  } catch (ex) {
     return res.status(500).send({ result: 'An error occured' });
   }
 };

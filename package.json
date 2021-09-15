@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "node app.js",
-    "test": "PORT=3001 jest",
+    "test": "PORT=3001 jest --verbose",
     "lint": "eslint"
   },
   "dependencies": {
