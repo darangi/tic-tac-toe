@@ -18,7 +18,7 @@ class Board {
     }
     
     setPlayer(playerId) {
-        this._players[playerId] = this.assignPlayerPiece();
+        this._players[playerId] = this._getPeiceToAssignPlayer();
 
         return playerId;
     }
@@ -45,7 +45,7 @@ class Board {
     }
 
 
-    getPlayerTurn() {
+    getNextPlayerToMove() {
         return !this.getLastMove() ? this._getFirstPlayerPiece() : this.getLastMove()  === 'X' ? 'O' : 'X'
     }
 
@@ -55,7 +55,7 @@ class Board {
         this._lastMove = null;
     }
 
-    assignPlayerPiece() {
+    _getPeiceToAssignPlayer() {
         let piece = ['X', 'O'][Math.floor(Math.random() * 2)];
         if (!Object.keys(this._players).length) {
             return piece;

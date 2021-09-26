@@ -9,14 +9,14 @@ describe('Matches', () => {
   const [firstPlayer, secondPlayer, thirdPlayer] = [1, 2, 3].map(() => generateId());
 
   it('Should create a match if non is available', () => {
-    match = matches.findAvailableMatch();
+    match = matches.findMatchWithSingleOrNoPlayer();
 
     expect(match).toBeNull();
 
     match = new Match();
     matches.addMatch(match);
 
-    const result = matches.findAvailableMatch();
+    const result = matches.findMatchWithSingleOrNoPlayer();
 
     expect(result).not.toBeNull();
     expect(result.getMatchId()).toBe(match.getMatchId());

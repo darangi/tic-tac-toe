@@ -1,11 +1,19 @@
 /* eslint-disable prefer-destructuring */
+const Joi = require('joi');
+
 const generateId = () => Math.random().toString(36).substring(2, 15)
  + Math.random().toString(36).substring(2, 15);
 
-const validateRequest = (requiredFields, expectedFields) => {
-  const result = requiredFields.filter((field) => !expectedFields.includes(field));
+const validateRequest = (fields) => {
+  const schema = Joi.object({
+    player: Joi.string().required(),
+    matchId: Joi.any().required(),
+    row: Joi.number().required(),
+    column: Joi.number().required(),
+  });
+  const { error } = schema.validate(fields);
 
-  return result.join(', ');
+  return error ? error.details.map(({ message }) => message).join(', ') : false;
 };
 
 module.exports = {

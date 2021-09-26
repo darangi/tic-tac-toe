@@ -37,7 +37,7 @@ class Result {
     return this.board && [].concat(...this.board).filter((position) => position !== '').length;
   }
 
-  result(board) {
+  compute(board) {
     this.board = board;
     const winner = this.winner();
     return {
@@ -47,4 +47,4 @@ class Result {
   };
 }
 
-module.exports = Result;
+module.exports = new Result();

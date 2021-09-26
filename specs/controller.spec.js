@@ -10,6 +10,7 @@ class RequestFormatter {
   constructor(data) {
     this._data = data.body.result
   } 
+
   get players() {
     return  Object.keys(this._data.players);
   }
@@ -23,6 +24,7 @@ class RequestFormatter {
   }
 
 }
+
 describe('Game', () => {
   const socketSpy = jest.spyOn(socket, 'emit');
 
@@ -148,7 +150,7 @@ describe('Game', () => {
 
       expect(response.status).toBe(400);
 
-      expect(response.body.message).toContain('Missing field(s)');
+      expect(response.body.message).toContain('required');
     });
 
     it('Should return status code 400 when a player register another move before opponent makes a move', async () => {

@@ -11,7 +11,7 @@ const start = (req, res) => {
       return res.status(400).send({ message: 'Missing field, playerId' });
     }
 
-    let match = matches.findAvailableMatch();
+    let match = matches.findMatchWithSingleOrNoPlayer();
     if (!match) {
       match = new Match();
       matches.addMatch(match);
@@ -33,25 +33,21 @@ const start = (req, res) => {
 
 const move = (req, res) => {
   try {
+    const missingFields = validateRequest(req.body);
+    if (missingFields) {
+      return res.status(400).send({ message: missingFields });
+    }
+
     const {
       matchId, row, column, player,
     } = req.body;
-
-    // Improvement: use a validator middleware
-    const requiredFields = ['matchId', 'row', 'column', 'player'];
-    const expectedFields = Object.keys(req.body);
-    const missingFields = validateRequest(requiredFields, expectedFields);
-
-    if (missingFields) {
-      return res.status(400).send({ message: `Missing field(s), ${missingFields}` });
-    }
 
     const match = matches.getMatch(matchId);
     if (!match) {
       return res.status(404).send({ message: 'Match does not exist' });
     }
 
-    if (match.lastMove() === player || match.playerTurn() !== player) {
+    if (match.lastMove() === player || match.nextPlayerToMove() !== player) {
       return res.status(400).send({ result: false });
     }
 

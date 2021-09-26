@@ -1,8 +1,8 @@
 const { generateId } = require("../scripts/utils");
 const Board = require("./board");
 const matches = require("./matches");
-const Result = require("./result");
-class Match extends Result {
+const result = require("./result");
+class Match {
   _players = []
   _board;
   _matchId;
@@ -10,7 +10,6 @@ class Match extends Result {
   _lastUpdate;
 
   constructor() {
-    super();
     this._matchId = generateId();
     this._board = new Board();
   }
@@ -39,17 +38,17 @@ class Match extends Result {
     return result;
   }
 
-  playerTurn() {
-    return this._board.getPlayerTurn();
+  nextPlayerToMove() {
+    return this._board.getNextPlayerToMove();
   }
 
   getBoard() {
     return {
       board: this._board.getBoard(),
       player: this._board.getPlayer(this._currentPlayer),
-      turn: this._board.getPlayerTurn(),
+      turn: this._board.getNextPlayerToMove(),
       players: this._board.getPlayers(),
-  };
+    };
   }
   
   lastMove() {
@@ -65,7 +64,7 @@ class Match extends Result {
   }
 
   state() {
-    return { matchId: this._matchId, ...this.result(this._board.getBoard()), ...this.getBoard() }
+    return { matchId: this._matchId, ...result.compute(this._board.getBoard()), ...this.getBoard() }
   }
 
   filled() {
